@@ -1,5 +1,6 @@
 import atexit
 import itertools
+import json
 import os
 import re
 import shlex
@@ -47,6 +48,10 @@ def strip_html(text):
 def login(browser):
     url = "http://member.restaurantdepot.com/Public/Login.aspx?ReturnUrl=%2fMember%2fSearchResults.aspx"
     browser.visit(url)
+
+    if not browser.is_element_present_by_id("cphMainContent_txtUserName", wait_time=10):
+        raise Exception("Could not log in.")
+
     browser.find_by_id("cphMainContent_txtUserName").fill("arisia.org")
     browser.find_by_id("cphMainContent_txtPassword").fill("1990")
     browser.find_by_id("cphMainContent_btnSubmit").click()
@@ -76,6 +81,7 @@ def search_and_load(browser, search_str):
             if repeat_count >= 3:
                 print("Search isn't working. Reloading the page...")
                 browser.reload()
+                print(browser.url)
                 repeat_count = 0
 
 def load_items_by_search(browser, search_str):
@@ -96,36 +102,60 @@ def load_category_checkboxes(browser):
 
     category_checkbox_table = browser.find_by_id(CATEGORY_CHECKBOX_TABLE_ID)[0]
     table_cells = category_checkbox_table.find_by_tag("td")
-    return [(cell.text, cell.find_by_tag("input")[0]._element.get_property("id")) for cell in table_cells]
-    '''
-    category_checkboxes = []
-    for cell in table_cells:
-        category_checkboxes.append((cell.text, cell.find_by_tag("input")[0]._element.get_property("id")))
-    # return [("Beverages & Mixers", "cphMainContent_chkCategories_0")]
-    return category_checkboxes
-    '''
+    return {cell.text: cell.find_by_tag("input")[0]._element.get_property("id") for cell in table_cells}
 
-def load_restaurant_depot_inventory(browser):
-    items_by_category = {}
-    for category_name, category_checkbox_id in load_category_checkboxes(browser):
+def load_intermediate_results():
+    with open(".cache.json") as cache_file:
+        return json.load(cache_file)
+
+def cache_intermediate_results(**kwargs):
+    with open(".cache.json", 'w') as cache_file:
+        json.dump(kwargs, cache_file)
+
+# def load_restaurant_depot_inventory(browser):
+def write_restaurant_depot_inventory(browser):
+    category_checkbox_dict = load_category_checkboxes(browser)
+
+    intermediate_results = load_intermediate_results()
+    categories = list(sorted(intermediate_results.get("remaining_categories", category_checkbox_dict.keys())))
+    last_search_str = intermediate_results.get("last_search", "").lower()
+    category_items = set(intermediate_results.get("items", []))
+
+    for category_index, category_name in enumerate(categories):
+        category_checkbox_id = category_checkbox_dict.get(category_name)
+        if not category_checkbox_id:
+            print("Could not find the {0} category. Skipping...")
+
+        remaining_categories = categories[category_index:]
+
         browser.find_by_id(category_checkbox_id).check()
 
         time.sleep(3)
 
-        items = set()
-        for search_letter in string.ascii_lowercase:
-            items |= load_items_by_search(browser, search_letter)
-        items_by_category[category_name] = items
-    return items_by_category
+        print
+        print(category_name)
 
-def write_inventory(items_by_category):
-    sorted_categories = {category: list(sorted(list(items))) for category, items in items_by_category}
-    with open("inventory.json", 'w') as inventory_file:
-        json.dump(inventory_file, sorted_categories)
+        items = category_items or set()
+        next_search_letter = chr(ord(last_search_str[0]) + 1) if last_search_str else "a" 
+        remaining_letters = string.ascii_lowercase[ord(next_search_letter) - 97:]
+        category_items, last_search_str = None, None
+        for search_letter in remaining_letters:
+            items |= load_items_by_search(browser, search_letter)
+            cache_intermediate_results(remaining_categories=remaining_categories, last_search=search_letter, items=list(items))
+
+        write_inventory_category(category_name, items)
+
+def get_filename(category):
+    return "inventory/{0}.json".format(category.replace(" ", "-"))
+
+def write_inventory_category(category, items):
+    sorted_items = list(sorted(list(items)))
+    filename = get_filename(category)
+    with open(filename, 'w') as inventory_file:
+        json.dump(sorted_items, inventory_file)
 
 if __name__ == "__main__":
     install_phantomjs()
     with init_browser() as browser:
         login(browser)
-        items_by_category = load_restaurant_depot_inventory(browser)
-        write_inventory(items_by_category)
+        write_restaurant_depot_inventory(browser)
