@@ -9,6 +9,7 @@ import string
 import subprocess
 import tempfile
 import time
+import urllib.parse
 
 from splinter import Browser
 
@@ -56,6 +57,26 @@ def login(browser):
     browser.find_by_id("cphMainContent_txtPassword").fill("1990")
     browser.find_by_id("cphMainContent_btnSubmit").click()
 
+def handle_url(browser, retry=True):
+    url_parts = urllib.parse.urlparse(browser.url)
+    if url_parts.path == "/Public/Error.aspx":
+        query_dict = urllib.parse.parse_qs(url_parts.query)
+        error_path = query_dict.pop("aspxerrorpath")
+        query_str = urllib.parse.urlencode(query_dict, doseq=True)
+        url_tuple = (url_parts.scheme, url_parts.netloc, error_path, url_parts.params, query_str, url_parts.fragments)
+        url = urllib.parse.unparse(url_tuple)
+        browser.visit(url)
+    elif url_parts.path == "/Public/Login.aspx":
+        login(browser)
+    else:
+        browser.reload()
+
+    if not browser.is_element_present_by_id("cphMainContent_txtSearch", wait_time=10):
+        if retry:
+            handle_url(browser, False)
+        else:
+            raise Exception("Could not return to the search page")
+
 def search(browser, search_text):
     search_box = browser.find_by_id("cphMainContent_txtSearch")[0]
     search_box.fill(search_text)
@@ -80,8 +101,7 @@ def search_and_load(browser, search_str):
             repeat_count += 1
             if repeat_count >= 3:
                 print("Search isn't working. Reloading the page...")
-                browser.reload()
-                print(browser.url)
+                handle_url(browser)
                 repeat_count = 0
 
 def load_items_by_search(browser, search_str):
@@ -105,8 +125,10 @@ def load_category_checkboxes(browser):
     return {cell.text: cell.find_by_tag("input")[0]._element.get_property("id") for cell in table_cells}
 
 def load_intermediate_results():
-    with open(".cache.json") as cache_file:
-        return json.load(cache_file)
+    if os.path.exists(".cache.json"):
+        with open(".cache.json") as cache_file:
+            return json.load(cache_file)
+    return {}
 
 def cache_intermediate_results(**kwargs):
     with open(".cache.json", 'w') as cache_file:
