@@ -63,7 +63,7 @@ def handle_url(browser, retry=True):
         query_dict = urllib.parse.parse_qs(url_parts.query)
         error_path = query_dict.pop("aspxerrorpath")
         query_str = urllib.parse.urlencode(query_dict, doseq=True)
-        url_tuple = (url_parts.scheme, url_parts.netloc, error_path, url_parts.params, query_str, url_parts.fragments)
+        url_tuple = (url_parts.scheme, url_parts.netloc, error_path, url_parts.params, query_str, url_parts.fragment)
         url = urllib.parse.unparse(url_tuple)
         browser.visit(url)
     elif url_parts.path == "/Public/Login.aspx":
