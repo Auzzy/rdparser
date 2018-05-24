@@ -1,6 +1,7 @@
 import atexit
 import itertools
 import json
+import multiprocessing
 import os
 import re
 import shlex
@@ -134,7 +135,30 @@ def cache_intermediate_results(**kwargs):
     with open(".cache.json", 'w') as cache_file:
         json.dump(kwargs, cache_file)
 
-# def load_restaurant_depot_inventory(browser):
+def load_category(category_name, category_checkbox_id, category_items, last_search_str):
+    with init_browser() as browser:
+        time.sleep(3)
+       
+        login(browser)
+        
+        time.sleep(3)
+
+        browser.find_by_id(category_checkbox_id).check()
+
+        time.sleep(3)
+
+        print
+        print(category_name)
+
+        items = category_items or set()
+        next_search_letter = chr(ord(last_search_str[0]) + 1) if last_search_str else "a" 
+        remaining_letters = string.ascii_lowercase[ord(next_search_letter) - 97:]
+        category_items, last_search_str = None, None
+        for search_letter in remaining_letters:
+            items |= load_items_by_search(browser, search_letter)
+
+        write_inventory_category(category_name, items)
+
 def write_restaurant_depot_inventory(browser):
     category_checkbox_dict = load_category_checkboxes(browser)
 
@@ -143,11 +167,20 @@ def write_restaurant_depot_inventory(browser):
     last_search_str = intermediate_results.get("last_search", "").lower()
     category_items = set(intermediate_results.get("items", []))
 
-    for category_index, category_name in enumerate(categories):
-        category_checkbox_id = category_checkbox_dict.get(category_name)
-        if not category_checkbox_id:
-            print("Could not find the {0} category. Skipping...")
+    with multiprocessing.Pool() as pool:
+        promises = []
+        for category_index, category_name in enumerate(categories):
+            category_checkbox_id = category_checkbox_dict.get(category_name)
+            if not category_checkbox_id:
+                print("Could not find the {0} category. Skipping...")
 
+            promises.append(pool.apply_async(load_category, (category_name, category_checkbox_id, category_items, last_search_str)))
+
+        for promise in promises:
+            promise.get()
+            
+
+        '''
         remaining_categories = categories[category_index:]
 
         browser.find_by_id(category_checkbox_id).check()
@@ -166,6 +199,7 @@ def write_restaurant_depot_inventory(browser):
             cache_intermediate_results(remaining_categories=remaining_categories, last_search=search_letter, items=list(items))
 
         write_inventory_category(category_name, items)
+        '''
 
 def get_filename(category):
     return "inventory/{0}.json".format(category.replace(" ", "-"))
