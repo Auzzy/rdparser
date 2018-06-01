@@ -2,6 +2,7 @@ import collections
 import json
 import os
 import sqlite3
+import sys
 
 INVENTORY_DIR = "/home/auzzy/git/rdparser/inventory/"
 
@@ -16,7 +17,8 @@ def load_inventory():
 
 inventory = load_inventory()
 
-connection = sqlite3.connect("inventory.db")
+db_path = sys.argv[1] if len(sys.argv) >= 1 else "inventory.db"
+connection = sqlite3.connect(db_path)
 cursor = connection.cursor()
 
 cursor.execute("PRAGMA foreign_keys = ON")
@@ -24,9 +26,11 @@ cursor.execute("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AU
 cursor.execute("""CREATE TABLE IF NOT EXISTS products (name, categoryid, url, store, stocked)""")
 
 store = "Restaurant Depot"
-cursor.execute("INSERT INTO categories (name, store) VALUES (?, ?)", (store, store))
-root_category_id = cursor.lastrowid
+# cursor.execute("INSERT INTO categories (name, store) VALUES (?, ?)", (store, store))
+# root_category_id = cursor.lastrowid
+root_category_id = None
 for category, products in inventory.items():
+    # cursor.execute("INSERT INTO categories (name, store, parentid) VALUES (?, ?, ?)", (category, store, root_category_id))
     cursor.execute("INSERT INTO categories (name, store, parentid) VALUES (?, ?, ?)", (category, store, root_category_id))
     category_id = cursor.lastrowid
     for product in products:
