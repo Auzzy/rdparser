@@ -47,7 +47,12 @@ def _retry_get(session, url, retries=4, timeout=10, **kwargs):
         raise Exception("Retrying the request fatally failed.")
 
 def _search(search_term, session):
-    response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term))
+    try:
+        response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term))
+    except Exception:
+        # Try refreshing the cookies, and if it fails again, let the Exception be raised
+        session.cookies.update(get_cookies())
+        response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term))
 
     if response.history:
         url_path = urlparse(response.url).path
