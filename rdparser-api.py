@@ -108,7 +108,7 @@ def _init_browser():
     try:
         browser = Browser("phantomjs")
     except Exception as exc:
-        if exc.msg == "'phantomjs' executable needs to be in PATH.":
+        if exc.msg.strip() == "'phantomjs' executable needs to be in PATH.":
             _install_phantomjs()
             browser = Browser("phantomjs")
         else:
