@@ -36,7 +36,7 @@ def _search(search_term, session):
     response = session.get(SEARCH_URL, params=_get_search_params(search_term))
     if response.history:
         url_path = urlparse(response.url).path
-        if url_path == "/Public/Error":
+        if url_path == "/Public/Error.aspx":
             print(response.history)
             print("An error occurred. Retrying...")
             return _search(search_term, session)
