@@ -1,5 +1,6 @@
 import atexit
 import json
+import multiprocessing
 import os
 import shlex
 import shutil
@@ -77,34 +78,42 @@ def _gather_items(search_term, category_id, session):
     response = _search(search_term, category_id, session)
     return _extract_product_names(response)
 
-def _retrieve_category_inventory(session, category_id, search_base=""):
+def _walk_category_inventory(session, category_id, category_name, search_base=""):
     inventory = set()
     for char in string.ascii_lowercase:
         search_term = search_base + char
         items = _gather_items(search_term, category_id, session)
-        print("{0}: FOUND {1} ITEMS".format(search_term, len(items)))
+        print("[{}] {}: FOUND {} ITEMS".format(category_name, search_term, len(items)))
         
         inventory.update(items)
 
         if len(items) >= 50:
-            overflow_inventory = _retrieve_category_inventory(session, category_id, search_base + char)
+            overflow_inventory = _walk_category_inventory(session, category_id, category_name, search_base + char)
             inventory.update(overflow_inventory)
     return inventory
 
-def _get_category_mapping(session):
-    response = session.get(SEARCH_URL)
+def _retrieve_category_inventory(category_id, category_name):
+    with requests.Session() as session:
+        session.cookies.update(get_cookies())
+        return _walk_category_inventory(session, category_id, category_name)
+
+def _get_category_mapping():
+    response = requests.get(SEARCH_URL, cookies=get_cookies())
     response_html = BeautifulSoup(response.text, "lxml")
     category_dropdown = response_html.find(id="category")
     category_dropdown_options = category_dropdown.find_all("option")
     return {option.get_text(): option["value"] for option in category_dropdown_options if option.get_text().strip().lower() != "department"}
 
-def retrieve_inventory(session):
-    category_mapping = _get_category_mapping(session)
-    # return {name: _retrieve_category_inventory(session, id) for name, id in category_mapping.items()}
+def retrieve_inventory():
+    category_mapping = _get_category_mapping()
     inventory_by_category = {}
-    for name, id in category_mapping.items():
-        print(name)
-        inventory_by_category[name] = _retrieve_category_inventory(session, id)
+    with multiprocessing.Pool() as pool:
+        promises = []
+        for name, id in category_mapping.items():
+            promises.append(pool.apply_async(_retrieve_category_inventory, (id, name)))
+
+        for promise in promises:
+            inventory_by_category[name] = promise.get()
     return inventory_by_category
 
 
@@ -154,11 +163,9 @@ def get_cookies():
         return browser.cookies.all()
 
 if __name__ == "__main__":
-    session = requests.Session()
-    session.cookies.update(get_cookies())
     start = time.time()
     try:
-        inventory = retrieve_inventory(session)
+        inventory = retrieve_inventory()
     finally:
         print(time.time() - start)
     write_inventory(inventory)
