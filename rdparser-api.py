@@ -32,8 +32,23 @@ def _extract_product_names(response):
     items_rows = items_table.find_all(**PRODUCT_ROW_FILTER)
     return [item_row.find(**PRODUCT_NAME_FILTER).get_text() for item_row in items_rows]
 
+def _retry_get(session, url, retries=4, timeout=10, **kwargs):
+    try_count = 0
+    current_timeout = timeout
+    while try_count < retries + 1:
+        try_count += 1
+        try:
+            return session.get(url, timeout=current_timeout, **kwargs)
+        except requests.exceptions.Timeout as exc:
+            query_str = "&".join(["{}={}".format(key, value) for key, value in kwargs.get("params").items()])
+            print("Timeout: {}?{}".format(url, query_str))
+            current_timeout *= 2
+    else:
+        raise Exception("Retrying the request fatally failed.")
+
 def _search(search_term, session):
-    response = session.get(SEARCH_URL, params=_get_search_params(search_term))
+    response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term))
+
     if response.history:
         url_path = urlparse(response.url).path
         if url_path == "/Public/Error.aspx":
