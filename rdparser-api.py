@@ -76,7 +76,7 @@ def _get_category_mapping(session):
     response_html = BeautifulSoup(response.text, "lxml")
     category_dropdown = response_html.find(id="category")
     category_dropdown_options = category_dropdown.find_all("option")
-    return {option.get_text(): option["value"] for option in category_dropdown_options}
+    return {option.get_text(): option["value"] for option in category_dropdown_options if option.get_text().strip().lower() != "department"}
 
 def retrieve_inventory(session):
     category_mapping = _get_category_mapping(session)
