@@ -1,20 +1,21 @@
-import atexit
+# import atexit
 import json
 import multiprocessing
-import os
-import shlex
-import shutil
+# import os
+# import shlex
+# import shutil
 import string
-import subprocess
-import tempfile
+# import subprocess
+# import tempfile
 import time
 from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
-from splinter import Browser
+# from splinter import Browser
 
-PHANTOMJS_URL = "https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2"
+import cookies
+
 
 SEARCH_URL = "http://member.restaurantdepot.com/Member/SearchResults.aspx"
 BASE_SEARCH_PARAMS = {"reset": "y"}
@@ -52,7 +53,7 @@ def _search(search_term, category_id, session):
         response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term, category_id))
     except Exception:
         # Try refreshing the cookies, and if it fails again, let the Exception be raised
-        session.cookies.update(get_cookies())
+        session.cookies.update(cookies.retrieve())
         response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term))
 
     if response.history:
@@ -63,7 +64,7 @@ def _search(search_term, category_id, session):
             return _search(search_term, category_id, session)
         elif url_path == "/Public/Login.aspx":
             print(response.history)
-            session.cookies.update(get_cookies())
+            session.cookies.update(cookies.retrieve())
             return _search(search_term, category_id, session)
         else:
             raise Exception("Unexpectedly redirected away from the search results: {}".format(response.url))
@@ -94,11 +95,11 @@ def _walk_category_inventory(session, category_id, category_name, search_base=""
 
 def _retrieve_category_inventory(category_id, category_name):
     with requests.Session() as session:
-        session.cookies.update(get_cookies())
+        session.cookies.update(cookies.retrieve())
         return _walk_category_inventory(session, category_id, category_name)
 
 def _get_category_mapping():
-    response = requests.get(SEARCH_URL, cookies=get_cookies())
+    response = requests.get(SEARCH_URL, cookies=cookies.retrieve())
     response_html = BeautifulSoup(response.text, "lxml")
     category_dropdown = response_html.find(id="category")
     category_dropdown_options = category_dropdown.find_all("option")
@@ -115,52 +116,6 @@ def retrieve_inventory():
         for promise in promises:
             inventory_by_category[name] = promise.get()
     return inventory_by_category
-
-
-def _install_phantomjs(phantomjs_url=PHANTOMJS_URL):
-    filename = "phantomjs.tar.bz2"
-    
-    tempdir = tempfile.mkdtemp()
-    atexit.register(shutil.rmtree, tempdir)
-    
-    filepath = os.path.join(tempdir, filename)
-    download_phantomjs_cmd = "wget {0} -O {1}".format(phantomjs_url, filepath)
-    subprocess.call(shlex.split(download_phantomjs_cmd))
-
-    untar_phantomjs_cmd = "tar -xjvf {0} -C {1}".format(filepath, tempdir)
-    untar_output = subprocess.check_output(shlex.split(untar_phantomjs_cmd))
-    phantomjs_dir = untar_output.splitlines()[0].decode('utf-8')
-
-    os.environ["PATH"] += ":" + os.path.join(tempdir, phantomjs_dir, "bin")
-
-def _init_browser():
-    try:
-        browser = Browser("phantomjs")
-    except Exception as exc:
-        if exc.msg.strip() == "'phantomjs' executable needs to be in PATH.":
-            _install_phantomjs()
-            browser = Browser("phantomjs")
-        else:
-            raise
-    browser.driver.set_window_size(2000, 10000)
-    return browser
-
-def _login(browser):
-    url = "http://member.restaurantdepot.com/Public/Login.aspx?ReturnUrl=%2fMember%2fSearchResults.aspx"
-    browser.visit(url)
-
-    if not browser.is_element_present_by_id("cphMainContent_txtUserName", wait_time=10):
-        raise Exception("Could not log in.")
-
-    browser.find_by_id("cphMainContent_txtUserName").fill("arisia.org")
-    browser.find_by_id("cphMainContent_txtPassword").fill("1990")
-    browser.find_by_id("cphMainContent_btnSubmit").click()
-
-def get_cookies():
-    with _init_browser() as browser:
-        _login(browser)
-        time.sleep(5)
-        return browser.cookies.all()
 
 if __name__ == "__main__":
     start = time.time()
