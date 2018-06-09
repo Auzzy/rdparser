@@ -26,7 +26,7 @@ PRODUCT_NAME_FILTER = {"name": "label", "class_": "description"}
 
 def write_inventory(inventory):
     with open("inventory.json", 'w') as inventory_file:
-        json.dump(inventory_file, inventory_file)
+        json.dump(inventory, inventory_file)
 
 def _extract_product_names(response):
     response_html = BeautifulSoup(response.text, "lxml")
@@ -91,7 +91,7 @@ def _walk_category_inventory(session, category_id, category_name, search_base=""
         if len(items) >= 50:
             overflow_inventory = _walk_category_inventory(session, category_id, category_name, search_base + char)
             inventory.update(overflow_inventory)
-    return inventory
+    return list(inventory)
 
 def _retrieve_category_inventory(category_id, category_name):
     with requests.Session() as session:
@@ -109,12 +109,12 @@ def retrieve_inventory():
     category_mapping = _get_category_mapping()
     inventory_by_category = {}
     with multiprocessing.Pool() as pool:
-        promises = []
+        promises = {}
         for name, id in category_mapping.items():
-            promises.append(pool.apply_async(_retrieve_category_inventory, (id, name)))
+            promises[name] = pool.apply_async(_retrieve_category_inventory, (id, name))
 
-        for promise in promises:
-            inventory_by_category[name] = promise.get()
+        for category, promise in promises.items():
+            inventory_by_category[category] = promise.get()
     return inventory_by_category
 
 if __name__ == "__main__":
