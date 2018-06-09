@@ -46,9 +46,9 @@ def _retry_get(session, url, retries=4, timeout=10, **kwargs):
     else:
         raise Exception("Retrying the request fatally failed.")
 
-def _search(search_term, session):
+def _search(search_term, category_id, session):
     try:
-        response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term))
+        response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term, category_id))
     except Exception:
         # Try refreshing the cookies, and if it fails again, let the Exception be raised
         session.cookies.update(get_cookies())
@@ -59,29 +59,29 @@ def _search(search_term, session):
         if url_path == "/Public/Error.aspx":
             print(response.history)
             print("An error occurred. Retrying...")
-            return _search(search_term, session)
+            return _search(search_term, category_id, session)
         elif url_path == "/Public/Login.aspx":
             print(response.history)
             session.cookies.update(get_cookies())
-            return _search(search_term, session)
+            return _search(search_term, category_id, session)
         else:
             raise Exception("Unexpectedly redirected away from the search results: {}".format(response.url))
     return response
 
-def _get_search_params(search_term):
-    search_params = {"term": search_term}
+def _get_search_params(search_term, category_id):
+    search_params = {"term": search_term, "category": category_id}
     search_params.update(BASE_SEARCH_PARAMS)
     return search_params
 
-def _gather_items(search_term, session):
-    response = _search(search_term, session)
+def _gather_items(search_term, category_id, session):
+    response = _search(search_term, category_id, session)
     return _extract_product_names(response)
 
 def _retrieve_category_inventory(session, category_id, search_base=""):
     inventory = set()
     for char in string.ascii_lowercase:
         search_term = search_base + char
-        items = _gather_items(search_term, session)
+        items = _gather_items(search_term, category_id, session)
         print("{0}: FOUND {1} ITEMS".format(search_term, len(items)))
         
         inventory.update(items)
