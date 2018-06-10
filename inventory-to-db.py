@@ -4,16 +4,11 @@ import os
 import sqlite3
 import sys
 
-INVENTORY_DIR = "/home/auzzy/git/rdparser/inventory/"
+INVENTORY_FILEPATH = "/home/auzzy/git/rdparser/inventory.json"
 
 def load_inventory():
-    category_to_products = {}
-    for category_filename in os.listdir(INVENTORY_DIR):
-        category_name = os.path.splitext(category_filename)[0].replace("-", " ")
-        with open(os.path.join(INVENTORY_DIR, category_filename)) as category_file:
-            category_to_products[category_name] = [product.strip() for product in set(json.load(category_file))]
-
-    return category_to_products
+    with open(INVENTORY_FILEPATH) as inventory_file:
+        return json.load(inventory_file)
 
 inventory = load_inventory()
 
@@ -26,12 +21,8 @@ cursor.execute("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AU
 cursor.execute("""CREATE TABLE IF NOT EXISTS products (name, categoryid, url, store, stocked)""")
 
 store = "Restaurant Depot"
-# cursor.execute("INSERT INTO categories (name, store) VALUES (?, ?)", (store, store))
-# root_category_id = cursor.lastrowid
-root_category_id = None
 for category, products in inventory.items():
-    # cursor.execute("INSERT INTO categories (name, store, parentid) VALUES (?, ?, ?)", (category, store, root_category_id))
-    cursor.execute("INSERT INTO categories (name, store, parentid) VALUES (?, ?, ?)", (category, store, root_category_id))
+    cursor.execute("INSERT INTO categories (name, store) VALUES (?, ?)", (category, store))
     category_id = cursor.lastrowid
     for product in products:
         cursor.execute("INSERT INTO products (name, categoryid, url, store, stocked) VALUES (?, ?, ?, ?, ?)", (product, category_id, None, store, None))
