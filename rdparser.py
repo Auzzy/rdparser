@@ -1,18 +1,11 @@
-# import atexit
 import json
 import multiprocessing
-# import os
-# import shlex
-# import shutil
 import string
-# import subprocess
-# import tempfile
 import time
 from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
-# from splinter import Browser
 
 import cookies
 
