@@ -138,7 +138,11 @@ name_filters = [
     "toaster",
     "cast iron",
     "shirt",
-    "apron"
+    "apron",
+    "blue gel",
+    "1 gallon storage      sunset",
+    "liquid light",
+    
 ]
 
 category_filters = [

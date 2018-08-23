@@ -12,12 +12,34 @@ class RegexRule(object):
 
         return name_format.format(**match.groupdict())
 
-regex_rules = [
-    
-]
+'''
+7-up club pack of 12 oz cans
+7-up upside down soda - 20oz/591ml plastic b7upls 24
+'''
+regex_rules_map = {
+    "3 piece food storage system w/drain.*": "3 piece food storage system w/drain",
+    "*hers reeses topin - hershey pack 6 reeses peanut butter natural  4.5 pound 6 in a case": "Reese's peanut butter",
+    # "1950 brand"
+    # 1950 brand part skim mozzarella cheese - 1950 brand mozzarella cheese part skim r/w average 24lb
+    # 1950 cheese r/w white cheddar
+    "4c (?P<item>.*?) (?P<size>\d+ ?qt) (?P<case>\d+ in a case)": "4c {item} - {size} {case}",
+    "4c iced tea (?P<flavor>[^-]+) (?P<size>\d+ ?qt) (?P<case>\d+ in a case)": "4c iced tea - {flavor} - {size} {case}",
+    "4c (?P<item>[^-]*) - 4c (?P<case>\d+ in a case)": "4c {item} - {case}",
+    "knorr (?P<item>.*?) - (?:knorr)?(?P<desc>.*?) (?:\d )?(?P<volume>[\d.]+ lb )?(?P<case>\d+ in a case)": "knorr {item} - {volume} - {case}",
+    "knorr (?P<item>.*?) (?:\d/[\w.#]+? )?(?P<volume>[\d.]+lb )?(?P<case>\d+ in a case)": "knorr {item} - {volume} - {case}",
+    "nabisco (?P<item>.*?)\s+(?P<count>\d+ct)(?P<case> \d+ in a case)?": "",
+    "nabisco (?P<item>.*?)(?P<size>[\d.]+(?:z|oz)?)? - (?:nabisco )?(?P<desc>.*?) (?P<volume>\d+ ?ounce )?(?P<case>\d+ in a case)": "nabisco {item} - {volume} - {case}",
+}
 
 
 abbrv_mapping = {
+    "clubpk": "clubpack",
+    "med": "medium",
+    "veg": "vegetable",
+    "ultima": "ultimate",
+    "lobst": "lobster",
+    "ultmte": "ultimate",
+    "topin": "topping",
     "xtra": "extra",
     "lrg": "large",
     "prem": "premium",
@@ -29,7 +51,7 @@ abbrv_mapping = {
     "btr": "batter",
     "btrd": "battered",
     "ult": "ultimate",
-    "knr": "Knorr",
+    "knr": "knorr",
     "frt": "fruit",
     "tndr": "tender",
     "fr": "fried",
@@ -90,7 +112,7 @@ abbrv_mapping = {
     "gld": "gold",
     "ital": "italian",
     "lt": "lite",
-    "smk": "Smucker's",
+    "smk": "smucker's",
     "thou": "thousand",
     "blk": "black",
     "fm": "foam",
@@ -100,8 +122,8 @@ abbrv_mapping = {
     "mushrm": "mushroom",
     "jalape": "jalepeno",
     "gls": "glass",
-    "r. bristol": "Royal Bristol",
-    "r.bristol": "Royal Bristol",
+    "r. bristol": "royal bristol",
+    "r.bristol": "royal bristol",
     "dess": "dessert",
     "knf": "knife",
     "spn": "spoon",
@@ -139,8 +161,18 @@ abbrv_mapping = {
     "pmkn": "pumpkin",
     "amer": "american",
     "grgzla": "gorgonzola",
-    "clnr": "cleaner"
+    "clnr": "cleaner",
+    "plte": "plate",
+    "ckn": "chicken",
+    "flvr": "flavor",
+    "chickn": "chicken",
+    "bse": "base",
+    "ckies": "cookies",
+    "dispensr": "dispenser"
 }
+
+
+regex_rules = [RegexRule(regex, name_pattern) for regex, name_pattern in regex_rules_map.items()]
 
 
 def apply(product_name):
