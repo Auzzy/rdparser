@@ -12,7 +12,7 @@ def load_inventory():
 
 inventory = load_inventory()
 
-db_path = sys.argv[1] if len(sys.argv) >= 1 else "inventory.db"
+db_path = sys.argv[1] if len(sys.argv) > 1 else "inventory.db"
 connection = sqlite3.connect(db_path)
 cursor = connection.cursor()
 

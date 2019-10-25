@@ -1,8 +1,6 @@
+import collections
 import json
-import multiprocessing
-import string
 import time
-from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -10,110 +8,76 @@ from bs4 import BeautifulSoup
 import cookies
 
 
-SEARCH_URL = "http://member.restaurantdepot.com/Member/SearchResults.aspx"
-BASE_SEARCH_PARAMS = {"reset": "y"}
-PRODUCTS_TABLE_ID = "ctl00_cphMainContent_resultsGrid_ctl00"
-PRODUCT_ROW_FILTER = {"name": "tr", "class_": ["rgRow", "rgAltRow"]}
-PRODUCT_NAME_FILTER = {"name": "label", "class_": "description"}
+INVENTORY_FILEPATH = "inventory.json"
+
+RD_BASE_PARAMS = {"sort": "saleranking", "it": "product", "lpurl": "%2Fproducts", "callback": "callback", "mpp": "96"}
+RD_API_ENDPOINT = "https://member.restaurantdepot.com/hawkproxy/"
 
 
-def write_inventory(inventory):
-    with open("inventory.json", 'w') as inventory_file:
-        json.dump(inventory, inventory_file)
+def done(page_html):
+    return not page_html.find(id="ctl00_SearchBody_NavigationTop_lnkNext")
 
-def _extract_product_names(response):
-    response_html = BeautifulSoup(response.text, "lxml")
-    items_table = response_html.find(id=PRODUCTS_TABLE_ID)
-    items_rows = items_table.find_all(**PRODUCT_ROW_FILTER)
-    return [item_row.find(**PRODUCT_NAME_FILTER).get_text() for item_row in items_rows]
+def process_page(page_html):
+    page_inventory = collections.defaultdict(list)
+    for product_item in page_html.find_all(attrs={"class": "product-item"}):
+        category_name = product_item.find(attrs={"class": "category-name"}).text
+        product_name = product_item.find(attrs={"class": "custom-listing-info"}).find("ul").find_all("li")[0].text
+        page_inventory[category_name].append(product_name)
+    return page_inventory
 
-def _retry_get(session, url, retries=4, timeout=10, **kwargs):
-    try_count = 0
-    current_timeout = timeout
-    while try_count < retries + 1:
-        try_count += 1
-        try:
-            return session.get(url, timeout=current_timeout, **kwargs)
-        except requests.exceptions.Timeout as exc:
-            query_str = "&".join(["{}={}".format(key, value) for key, value in kwargs.get("params").items()])
-            print("Timeout: {}?{}".format(url, query_str))
-            current_timeout *= 2
-    else:
-        raise Exception("Retrying the request fatally failed.")
+def _extract_html_from_callback(response_text):
+    start = response_text.index("(")
+    end = response_text.rindex(")")
+    response_json = json.loads(response_text[start + 1:end])
+    return BeautifulSoup(response_json["html"], "lxml")
 
-def _search(search_term, category_id, session):
-    try:
-        response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term, category_id))
-    except Exception:
-        # Try refreshing the cookies, and if it fails again, let the Exception be raised
-        session.cookies.update(cookies.retrieve())
-        response = _retry_get(session, SEARCH_URL, params=_get_search_params(search_term))
+def send_request(pageno, cookiejar):
+    params = RD_BASE_PARAMS.copy()
+    params["pg"] = str(pageno)
+    response = requests.get(RD_API_ENDPOINT, params=params, cookies=cookiejar)
+    return _extract_html_from_callback(response.text)
 
-    if response.history:
-        url_path = urlparse(response.url).path
-        if url_path == "/Public/Error.aspx":
-            print(response.history)
-            print("An error occurred. Retrying...")
-            return _search(search_term, category_id, session)
-        elif url_path == "/Public/Login.aspx":
-            print(response.history)
-            session.cookies.update(cookies.retrieve())
-            return _search(search_term, category_id, session)
-        else:
-            raise Exception("Unexpectedly redirected away from the search results: {}".format(response.url))
-    return response
+def _write_items(new_inventory):
+    with open(INVENTORY_FILEPATH, 'r') as rd_inventory_file:
+        current_inventory = json.load(rd_inventory_file)
 
-def _get_search_params(search_term, category_id):
-    search_params = {"term": search_term, "category": category_id}
-    search_params.update(BASE_SEARCH_PARAMS)
-    return search_params
-
-def _gather_items(search_term, category_id, session):
-    response = _search(search_term, category_id, session)
-    return _extract_product_names(response)
-
-def _walk_category_inventory(session, category_id, category_name, search_base=""):
-    inventory = set()
-    for char in string.ascii_lowercase:
-        search_term = search_base + char
-        items = _gather_items(search_term, category_id, session)
-        print("[{}] {}: FOUND {} ITEMS".format(category_name, search_term, len(items)))
+    inventory = collections.defaultdict(list)
+    inventory.update(current_inventory)
+    for category, items in new_inventory.items():
+        inventory[category].extend(items)
         
-        inventory.update(items)
+    with open(INVENTORY_FILEPATH, 'w') as rd_inventory_file:
+        json.dump(inventory, rd_inventory_file)
 
-        if len(items) >= 50:
-            overflow_inventory = _walk_category_inventory(session, category_id, category_name, search_base + char)
-            inventory.update(overflow_inventory)
-    return list(inventory)
+def _clear_inventory():
+    with open(INVENTORY_FILEPATH, 'w') as rd_inventory_file:
+        json.dump({}, rd_inventory_file)
 
-def _retrieve_category_inventory(category_id, category_name):
-    with requests.Session() as session:
-        session.cookies.update(cookies.retrieve())
-        return _walk_category_inventory(session, category_id, category_name)
+def _load_cookies():
+    cookiejar = requests.cookies.RequestsCookieJar()
+    cookiejar.update(cookies.retrieve())
+    return cookiejar
 
-def _get_category_mapping():
-    response = requests.get(SEARCH_URL, cookies=cookies.retrieve())
-    response_html = BeautifulSoup(response.text, "lxml")
-    category_dropdown = response_html.find(id="category")
-    category_dropdown_options = category_dropdown.find_all("option")
-    return {option.get_text(): option["value"] for option in category_dropdown_options if option.get_text().strip().lower() != "department"}
+def download_raw_rd_inventory():
+    cookiejar = _load_cookies()
 
-def retrieve_inventory():
-    category_mapping = _get_category_mapping()
-    inventory_by_category = {}
-    with multiprocessing.Pool() as pool:
-        promises = {}
-        for name, id in category_mapping.items():
-            promises[name] = pool.apply_async(_retrieve_category_inventory, (id, name))
+    _clear_inventory()
 
-        for category, promise in promises.items():
-            inventory_by_category[category] = promise.get()
-    return inventory_by_category
+    inventory = {}
+    pageno = 1
+    while True:
+        page_html = send_request(pageno, cookiejar)
+        page_inventory = process_page(page_html)
+        _write_items(page_inventory)
+
+        if done(page_html):
+            break
+
+        pageno += 1
+
+        # Since this is an unofficial API, self-throttle to avoid pissing them off.
+        time.sleep(5)
 
 if __name__ == "__main__":
-    start = time.time()
-    try:
-        inventory = retrieve_inventory()
-    finally:
-        print(time.time() - start)
-    write_inventory(inventory)
+    download_raw_rd_inventory()
+
