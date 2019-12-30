@@ -102,4 +102,4 @@ ENV/
 
 # custom
 *.db
-inventory.json
+*.json
