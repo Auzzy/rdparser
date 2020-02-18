@@ -14,15 +14,33 @@ RD_API_ENDPOINT = "https://member.restaurantdepot.com/hawkproxy/"
 def done(page_html):
     return not page_html.find(id="ctl00_SearchBody_NavigationTop_lnkNext")
 
+def get_price(product_item):
+    price = None
+    price_section = product_item.find("span", attrs={"class": "select-price"})
+    if price_section:
+        price = price_section.get_text(strip=True)
+    else:
+        price_section = product_item.find("select", attrs={"class": "product-package-select"})
+        if price_section:
+            price_element = price_section.find("option", value=lambda value: value, string=lambda text: text.strip().startswith("Unit"))
+            if price_element:
+                price = price_element.get_text(strip=True)[4:].strip()
+
+    return price.replace("$", "") if price else None
+
 def process_page(page_html):
     page_inventory = []
     for product_item in page_html.find_all(attrs={"class": "product-item"}):
-        category_name = product_item.find(attrs={"class": "category-name"}).text
-        product_name = product_item.find(attrs={"class": "custom-listing-info"}).find("ul").find_all("li")[0].text
+        category_name = product_item.find(attrs={"class": "category-name"}).get_text()
+        product_name = product_item.find(attrs={"class": "custom-listing-info"}).find("ul").find_all("li")[0].get_text()
+        price = get_price(product_item)
+
         page_inventory.append({
             "name": product_name,
-            "categories": [[category_name]]
+            "categories": [[category_name]],
+            "price": price
         })
+
     return page_inventory
 
 def _extract_html_from_callback(response_text):
