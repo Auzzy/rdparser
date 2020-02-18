@@ -15,11 +15,14 @@ def done(page_html):
     return not page_html.find(id="ctl00_SearchBody_NavigationTop_lnkNext")
 
 def process_page(page_html):
-    page_inventory = collections.defaultdict(list)
+    page_inventory = []
     for product_item in page_html.find_all(attrs={"class": "product-item"}):
         category_name = product_item.find(attrs={"class": "category-name"}).text
         product_name = product_item.find(attrs={"class": "custom-listing-info"}).find("ul").find_all("li")[0].text
-        page_inventory[category_name].append(product_name)
+        page_inventory.append({
+            "name": product_name,
+            "categories": [[category_name]]
+        })
     return page_inventory
 
 def _extract_html_from_callback(response_text):
@@ -35,20 +38,19 @@ def send_request(pageno, cookiejar):
     return _extract_html_from_callback(response.text)
 
 def _update_inventory(current_inventory, new_inventory, inventory_filepath):
-    inventory = collections.defaultdict(list)
-    inventory.update(current_inventory)
-    for category, items in new_inventory.items():
-        inventory[category].extend(items)
-
+    current_inventory["inventory"].extend(new_inventory)
+    
     if inventory_filepath:
         with open(inventory_filepath, 'w') as rd_inventory_file:
-            json.dump(inventory, rd_inventory_file)
+            json.dump(current_inventory, rd_inventory_file)
     
-    return inventory
+    return current_inventory
 
 def _clear_inventory(inventory_filepath):
+    inventory = {"inventory": []}
     with open(inventory_filepath, 'w') as rd_inventory_file:
-        json.dump({}, rd_inventory_file)
+        json.dump(inventory, rd_inventory_file)
+    return inventory
 
 def _load_cookies():
     cookiejar = requests.cookies.RequestsCookieJar()
@@ -58,10 +60,10 @@ def _load_cookies():
 def download(inventory_filepath):
     cookiejar = _load_cookies()
 
-    if inventory_filepath:
-        _clear_inventory(inventory_filepath)
-
     inventory = {}
+    if inventory_filepath:
+        inventory = _clear_inventory(inventory_filepath)
+
     pageno = 1
     while True:
         page_html = send_request(pageno, cookiejar)
