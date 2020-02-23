@@ -26,7 +26,7 @@ def get_price(product_item):
             if price_element:
                 price = price_element.get_text(strip=True)[4:].strip()
 
-    price = price.replace("$", "") if price else None
+    price = float(price.replace("$", "").replace(",", "")) if price else None
     return {
         "max": price,
         "min": price
