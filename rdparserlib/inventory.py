@@ -26,7 +26,11 @@ def get_price(product_item):
             if price_element:
                 price = price_element.get_text(strip=True)[4:].strip()
 
-    return price.replace("$", "") if price else None
+    price = price.replace("$", "") if price else None
+    return {
+        "max": price,
+        "min": price
+    }
 
 def process_page(page_html):
     page_inventory = []
