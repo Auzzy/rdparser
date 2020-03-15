@@ -39,10 +39,14 @@ def process_page(page_html):
         product_name = product_item.find(attrs={"class": "custom-listing-info"}).find("ul").find_all("li")[0].get_text()
         price = get_price(product_item)
 
+        itemnum = product_item.find(attrs={"class": "custom-listing-info"}).find("ul").find_all("li")[1].get_text()
+        itemnum = itemnum[5:].strip() if itemnum.lower().startswith("item:") else None
+
         page_inventory.append({
             "name": product_name,
             "categories": [[category_name]],
-            "price": price
+            "price": price,
+            "sku": itemnum
         })
 
     return page_inventory
